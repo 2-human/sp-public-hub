@@ -142,6 +142,12 @@ button.linkish:hover{background:var(--accent-bg);text-decoration:underline}
 .contacts li{background:var(--surface-2);border-radius:8px;padding:8px 10px;margin:0}
 .contacts .k{display:block;font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.04em}
 .contacts .v{font-weight:500;word-break:break-word}
+.archbox{border:1px solid var(--line-strong);border-radius:8px;padding:10px 12px;margin-top:14px;display:flex;flex-direction:column;gap:8px}
+.archbox.on{background:var(--s-0-bg);border-color:transparent}
+.archbox .row2{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.archbox input{flex:1;min-width:160px;font:inherit;font-size:13px;padding:6px 8px;border-radius:6px;border:1px solid var(--line-strong);background:var(--surface);color:var(--text)}
+tr.row.arch td{opacity:.5}
+.tag.arch{background:var(--s-0-bg);color:var(--s-0)}
 .open-items{background:var(--s-m1-bg);border-radius:8px;padding:2px 12px 10px;margin-top:14px}.open-items h4{color:var(--s-m1)!important}.open-items li{font-size:13px}
 .quote{border-left:3px solid var(--line-strong);padding:2px 0 2px 10px;color:var(--muted);font-style:italic}
 .elist{list-style:none;padding:0!important;display:flex;flex-direction:column;gap:4px}
@@ -401,7 +407,16 @@ $('#drClose').onclick = () => closeDrawer();
 scrim.onclick = () => closeDrawer();
 document.addEventListener('keydown', e => { if (e.key==='Escape' && drawer.classList.contains('open')) closeDrawer(); });
 let pendingFocus = null;
-$('#drawer').addEventListener('click', e => {
+$('#drawer').addEventListener('click', async e => {
+  const ab = e.target.closest('[data-archive],[data-unarchive]');
+  if (ab) {
+    const i = +(ab.dataset.archive ?? ab.dataset.unarchive), r = R[i], archive = 'archive' in ab.dataset;
+    const reason = archive ? ($('#archReason')?.value || '').trim() : (r._state?.reason || '');
+    ab.disabled = true;
+    try { r._state = await S.setArchived(r._docId, archive, reason); renderFilters(); renderRes(); openDrawer(entityDrawer(i), 'kontakti', i); }
+    catch (err) { ab.disabled = false; const m = $('#archMsg'); if (m) m.textContent = 'Nije uspelo: ' + (err.code || err.message); }
+    return;
+  }
   const b = e.target.closest('[data-go]'); if (!b) return;
   const [v, id] = b.dataset.go.split('/'); go(v, id);
 });
@@ -416,6 +431,19 @@ function contactsHtml(r){
   }).join('');
   return items ? `<ul class="contacts">${items}</ul>` : '<p class="faint">Nije pronađen javni kontakt.</p>';
 }
+const isArch = r => !!r._state?.archived;
+function archiveHtml(r, i){
+  const st = r._state || {};
+  if (st.archived) {
+    const when = st.at?.toDate ? st.at.toDate().toISOString().slice(0,10) : (st.at||'');
+    return `<section class="archbox on"><b>Arhiviran: ne kontaktirati</b>
+      <span class="faint" style="font-size:12px">${esc(st.reason||'bez razloga')} · ${esc(st.byEmail||'')}${when?' · '+esc(when):''}</span>
+      <div class="row2"><button data-unarchive="${i}">Vrati iz arhive</button></div></section>`;
+  }
+  return `<section class="archbox"><span class="faint" style="font-size:12px">Ako ne želimo da kontaktiramo ovaj entitet, arhiviraj ga. Neće se prikazivati u listi (filter „Arhiva“), a Claude ga preskače u novim pretragama.</span>
+    <div class="row2"><input id="archReason" placeholder="Razlog (npr. provladin, već kontaktiran, nije relevantan)" maxlength="300"><button data-archive="${i}">Arhiviraj (ne kontaktirati)</button></div>
+    <span class="faint" id="archMsg" style="font-size:12px"></span></section>`;
+}
 function entityDrawer(i, focus){
   const r = R[i], d = r.stav_pokret?.dokaz;
   const pop = (r.popularnost||[]).map(p=>`<li>${esc(p.metrika)}: <b>${esc(p.vrednost)}</b> <span class="faint">(${/^https?:/.test(p.izvor||'')?link(p.izvor,'izvor'):esc(p.izvor||'')})</span></li>`).join('');
@@ -426,6 +454,7 @@ function entityDrawer(i, focus){
     meta: `${prio(r.prioritet||0)} ${segPill(r.segment)}`,
     focus,
     body: `
+      ${archiveHtml(r, i)}
       ${(r.otvoreno_sve||[]).length?`<section class="open-items"><h4>Otvoreno / za proveru (${r.otvoreno_sve.length})</h4><ul>${r.otvoreno_sve.map(x=>`<li>${esc(x).replace(/https?:\/\/[^\s<]+/g, u=>`<a href="${u}" target="_blank" rel="noopener">${u.replace(/^https?:\/\/(www\.)?/,'').slice(0,60)}</a>`)}</li>`).join('')}</ul></section>`:''}
       <section id="dr-contacts"><h4>Kontakt (javne stranice)</h4>${contactsHtml(r)}</section>
       <h4>Predlog upotrebe za kampanju</h4><p>${esc(r.predlog)}</p>
@@ -543,11 +572,14 @@ const FILTERS = [
   {key:'kontakt', label:'Kontakt', vals:contactKinds, order:['Email','Telefon','Forma / stranica','Bez kontakta']},
   {key:'upit', label:'Upit', vals:r=>r.kw||[], order:KW.map(k=>k.id), fmt:v=>{const k=KW.find(x=>x.id===v); return k?`${v} · ${k.upit}`:v;}},
   {key:'platforma', label:'Platforma', vals:platOf},
+  {key:'arhiva', label:'Arhiva', vals:r=>[isArch(r)?'Arhiviran':'Aktivan'], order:['Aktivan','Arhiviran']},
 ];
 const FKEY = 'scout.filters.v1';
 let fsel = {};
 try { const saved = JSON.parse(localStorage.getItem(FKEY)) || {}; FILTERS.forEach(f => fsel[f.key] = new Set(saved[f.key]||[])); }
 catch(_) { FILTERS.forEach(f => fsel[f.key] = new Set()); }
+// Archived entities are hidden by default (filter 'Arhiva' = Aktivan) unless the viewer chose otherwise.
+try { if (!('arhiva' in (JSON.parse(localStorage.getItem(FKEY)) || {}))) fsel.arhiva = new Set(['Aktivan']); } catch(_) { fsel.arhiva = new Set(['Aktivan']); }
 const saveF = () => { try{ localStorage.setItem(FKEY, JSON.stringify(Object.fromEntries(FILTERS.map(f=>[f.key,[...fsel[f.key]]])))); }catch(_){} };
 const passes = (r, skip) => FILTERS.every(f => f.key===skip || !fsel[f.key].size || f.vals(r).some(v => fsel[f.key].has(v)));
 const filtered = () => R.filter(r => passes(r));
@@ -591,9 +623,9 @@ function renderRes(){
     const id = R.indexOf(r), p0 = (r.popularnost||[])[0];
     const ne = kcount(r,'email'), nt = kcount(r,'telefon'), no = (r.kontakt||[]).length - ne - nt;
     const kc = [ne?`✉ ${ne}`:'', nt?`☎ ${nt}`:'', !ne&&!nt&&no?`↗ ${no}`:''].filter(Boolean).join(' ');
-    return `<tr class="row ${sel[0]==='kontakti'&&sel[1]===String(id)?'sel':''}" tabindex="0" data-view="kontakti" data-id="${id}">
+    return `<tr class="row ${isArch(r)?'arch':''} ${sel[0]==='kontakti'&&sel[1]===String(id)?'sel':''}" tabindex="0" data-view="kontakti" data-id="${id}">
       <td>${prio(r.prioritet||0)}</td>
-      <td><div class="name">${esc(r.name)}</div><div class="faint" style="font-size:12px">${esc(r.kategorija)}</div></td>
+      <td><div class="name">${esc(r.name)}${isArch(r)?' <span class="tag arch">arhiviran</span>':''}</div><div class="faint" style="font-size:12px">${esc(r.kategorija)}</div></td>
       <td class="muted">${esc(r.tip)}</td>
       <td class="muted">${esc(r.oblast)}</td>
       <td class="muted">${esc(r.drzava)}</td>
@@ -620,10 +652,10 @@ function csv(name, head, rows){
 }
 $('#csvKw').onclick = ()=>csv('kriterijumi-pretrage.csv', csvCols, [...KW.map(k=>csvCols.map(c=>k[c])), ...drafts.map(d=>csvCols.map(c=>c==='status'?(d.poslato?'poslato':'nacrt'):d[c]))]);
 $('#csvRes').onclick = ()=>csv('kontakti.csv',
-  ['prioritet','entitet','tip','kategorija','oblast','zemlja_sediste','primarno_trziste','zemlja_opis','stav_pokret','stav_pokret_oznaka','stav_izbori','stav_izbori_oznaka','popularnost','segment','analiza','predlog','rezultat_url','emailovi','telefoni','kontakt_izvori','upit','platforma','otvoreno'],
+  ['prioritet','entitet','tip','kategorija','oblast','zemlja_sediste','primarno_trziste','zemlja_opis','stav_pokret','stav_pokret_oznaka','stav_izbori','stav_izbori_oznaka','popularnost','segment','analiza','predlog','rezultat_url','emailovi','telefoni','kontakt_izvori','upit','platforma','otvoreno','arhiviran','razlog_arhive'],
   filtered().map(r=>[r.prioritet,r.name,r.tip,r.kategorija,r.oblast,r.drzava,r.primarno_trziste,r.zemlja,r.stav_pokret?.ocena,r.stav_pokret?.oznaka,r.stav_politika_izbori?.ocena,r.stav_politika_izbori?.oznaka,
     (r.popularnost||[]).map(p=>`${p.metrika}: ${p.vrednost}`).join('; '),r.segment,r.analiza,r.predlog,r.rezultat?.url,
-    kv(r,'email'),kv(r,'telefon'),(r.kontakt||[]).map(k=>typeof k==='object'?k.izvor:k).filter(Boolean).join(' '),r.pronadjeno?.upit,r.pronadjeno?.platforma,(r.otvoreno_sve||[]).join(' | ')]));
+    kv(r,'email'),kv(r,'telefon'),(r.kontakt||[]).map(k=>typeof k==='object'?k.izvor:k).filter(Boolean).join(' '),r.pronadjeno?.upit,r.pronadjeno?.platforma,(r.otvoreno_sve||[]).join(' | '),isArch(r)?'da':'ne',r._state?.reason||'']));
 
 renderKw(); renderFilters(); renderRes();
 window.addEventListener('hashchange', route);
@@ -712,10 +744,12 @@ onAuthStateChanged(auth, async user => {
 });
 
 async function loadData() {
-  const [ents, kws, exs, run] = await Promise.all([
+  const [ents, kws, exs, run, states] = await Promise.all([
     getDocs(collection(db, 'entities')), getDocs(collection(db, 'keywords')),
-    getDocs(collection(db, 'excluded')), getDoc(doc(db, 'meta', 'run'))]);
-  const results = ents.docs.map(d => ({ _docId: d.id, ...d.data() })).sort((a, b) => (a._order ?? 0) - (b._order ?? 0));
+    getDocs(collection(db, 'excluded')), getDoc(doc(db, 'meta', 'run')),
+    getDocs(collection(db, 'entityState')).catch(() => ({ docs: [] }))]);   // rules not yet published -> no archive marks, list still loads
+  const stateById = Object.fromEntries(states.docs.map(d => [d.id, d.data()]));
+  const results = ents.docs.map(d => ({ _docId: d.id, ...d.data(), _state: stateById[d.id] || null })).sort((a, b) => (a._order ?? 0) - (b._order ?? 0));
   const keywords = kws.docs.map(d => ({ ...d.data(), id: d.data().id || d.id, _docId: d.id }))
     .sort((a, b) => String(a.id).localeCompare(String(b.id)));
   const excluded = exs.docs.sort((a, b) => a.id.localeCompare(b.id)).map(d => d.data());
@@ -736,6 +770,12 @@ function session(user, prof) {
         out.push(data);
       }
       return out;
+    },
+    // Archive = "do not contact". Kept in entityState/{entityDocId} so repo->Firestore sync never overwrites it.
+    async setArchived(docId, archived, reason) {
+      const data = { archived, reason: String(reason || '').slice(0, 300), byUid: user.uid, byEmail: user.email, at: serverTimestamp() };
+      await setDoc(doc(db, 'entityState', docId), data);
+      return { ...data, at: new Date().toISOString().slice(0, 10) };
     },
     onView(view) {
       if (view === 'korisnici') renderUsers();
