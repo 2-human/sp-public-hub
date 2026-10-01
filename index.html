@@ -285,7 +285,7 @@ button.primary:hover{opacity:.9;background:var(--accent)}
 <!-- VIEW: Korisnici (admin) -->
 <section class="view" id="v-korisnici" hidden>
   <div class="view-head"><div><h2>Korisnici</h2>
-    <p class="sub">Dodavanje, brisanje i reset lozinke. Na besplatnom Firebase planu „brisanje“ oduzima pristup svim podacima, a nalog za prijavu ostaje; trajno se briše u <a id="consoleLink" target="_blank" rel="noopener">Firebase konzoli</a>.</p></div>
+    <p class="sub">Dodavanje, brisanje i reset lozinke. „Obriši“ uklanja korisnika odavde i odmah mu ukida pristup. Lista se ne usklađuje sama sa <a id="consoleLink" target="_blank" rel="noopener">Firebase konzolom</a> (besplatan plan): korisnika obrisanog u konzoli obriši i ovde, i obrnuto.</p></div>
     <div class="faint" id="usersCount" style="font-size:12px"></div></div>
   <div class="panel">
     <h3>Dodaj korisnika</h3>
@@ -672,7 +672,7 @@ route();
 import { initializeApp, deleteApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
 import { getAuth, connectAuthEmulator, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail,
   createUserWithEmailAndPassword, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
-import { getFirestore, connectFirestoreEmulator, doc, getDoc, getDocs, setDoc, updateDoc, collection, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+import { getFirestore, connectFirestoreEmulator, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -826,7 +826,7 @@ async function renderUsers() {
     <td class="faint">${p.active ? '' : when(p.deactivatedAt)}<\/td>
     <td class="uact">
       <button class="linkish" data-act="reset">Pošalji reset lozinke<\/button>
-      ${p.uid === me ? '' : p.active ? '<button class="linkish danger" data-act="off">Obriši (oduzmi pristup)<\/button>' : '<button class="linkish" data-act="on">Vrati pristup<\/button>'}
+      ${p.uid === me ? '' : (p.active ? '<button class="linkish" data-act="off">Oduzmi pristup<\/button>' : '<button class="linkish" data-act="on">Vrati pristup<\/button>') + ' <button class="linkish danger" data-act="del">Obriši<\/button>'}
     <\/td><\/tr>`).join('') || '<tr><td colspan="6" class="faint">Nema korisnika.<\/td><\/tr>';
   $('#usersCount').textContent = `${profiles.filter(p => p.active).length} aktivnih · ${profiles.filter(p => !p.active).length} bez pristupa`;
   $('#consoleLink').href = consoleUsersUrl();
@@ -844,7 +844,16 @@ $('#usersBody').addEventListener('click', async e => {
   } else if (b.dataset.act === 'off') {
     if (!confirmInline(b, 'Potvrdi')) return;
     await act(() => updateDoc(doc(db, 'profiles', uid), { active: false, deactivatedAt: serverTimestamp(), updatedAt: serverTimestamp(), updatedBy: auth.currentUser.uid }),
-      `${p.email} više nema pristup. Nalog za prijavu ostaje u Firebase-u (Spark plan); trajno brisanje je u konzoli.`);
+      `${p.email} više nema pristup (može se vratiti).`);
+  } else if (b.dataset.act === 'del') {
+    if (!confirmInline(b, 'Potvrdi')) return;
+    const msg = $('#usersMsg');
+    try {
+      await deleteDoc(doc(db, 'profiles', uid));
+      msg.dataset.kind = 'ok';
+      msg.innerHTML = `${esc(p.email)} je obrisan i više nema pristup. Ako nalog za prijavu još postoji, obriši ga i u <a href="${consoleUsersUrl()}" target="_blank" rel="noopener">Firebase konzoli<\/a> (bez profila ionako ne vidi ništa).`;
+      renderUsers();
+    } catch (err) { msg.dataset.kind = 'err'; msg.textContent = 'Brisanje nije uspelo: ' + (err.code || err.message); }
   } else if (b.dataset.act === 'on') {
     await act(() => updateDoc(doc(db, 'profiles', uid), { active: true, updatedAt: serverTimestamp(), updatedBy: auth.currentUser.uid }), `${p.email} ponovo ima pristup.`);
   }
