@@ -617,13 +617,16 @@ fEl.addEventListener('click', e=>{
   saveF(); renderFilters(); renderRes();
 });
 document.addEventListener('click', e=>{ fEl.querySelectorAll('details[open]').forEach(d=>{ if(!d.contains(e.target)) d.open=false; }); });
+const ROW_LIMIT = 500;                       // the table draws this many rows; filters and the CSV export always see all of them
+const RI = new Map(R.map((r, i) => [r, i]));
 function renderRes(){
-  const rows = filtered();
-  $('#empty').hidden = rows.length>0;
-  const fc = $('#fCount'); if (fc) fc.textContent = rows.length===R.length ? `${R.length} entiteta` : `Prikazano ${rows.length} od ${R.length}`;
+  const all = filtered(), rows = all.slice(0, ROW_LIMIT);
+  $('#empty').hidden = all.length>0;
+  const fc = $('#fCount'); if (fc) fc.textContent = (all.length===R.length ? `${R.length} entiteta` : `Prikazano ${all.length} od ${R.length}`)
+    + (all.length>ROW_LIMIT ? ` · u tabeli prvih ${ROW_LIMIT} po prioritetu, suzite filterima` : '');
   const sel = decodeURIComponent(location.hash.slice(1)).split('/');
   $('#resTable tbody').innerHTML = rows.map(r=>{
-    const id = R.indexOf(r), p0 = (r.popularnost||[])[0];
+    const id = RI.get(r), p0 = (r.popularnost||[])[0];
     const ne = kcount(r,'email'), nt = kcount(r,'telefon'), no = (r.kontakt||[]).length - ne - nt;
     const kc = [ne?`✉ ${ne}`:'', nt?`☎ ${nt}`:'', !ne&&!nt&&no?`↗ ${no}`:''].filter(Boolean).join(' ');
     return `<tr class="row st-${statusOf(r)} ${sel[0]==='kontakti'&&sel[1]===String(id)?'sel':''}" tabindex="0" data-view="kontakti" data-id="${id}">
@@ -752,7 +755,10 @@ async function loadData() {
     getDocs(collection(db, 'excluded')), getDoc(doc(db, 'meta', 'run')),
     getDocs(collection(db, 'entityState')).catch(() => ({ docs: [] }))]);   // rules not yet published -> no archive marks, list still loads
   const stateById = Object.fromEntries(states.docs.map(d => [d.id, d.data()]));
-  const results = ents.docs.map(d => ({ _docId: d.id, ...d.data(), _state: stateById[d.id] || null })).sort((a, b) => (a._order ?? 0) - (b._order ?? 0));
+  // A doc is one entity, or a bundle of directory entities ({_bundle, defaults, items}: the sync packs radio stations 200 to a doc, shared fields once in `defaults`, so a login
+  // costs one read per bundle, not one per station). Each item carries its own _docId, which is also its entityState id.
+  const results = ents.docs.flatMap(d => { const x = d.data(); return x._bundle ? x.items.map(it => ({ ...x.defaults, ...it })) : [{ _docId: d.id, ...x }]; })
+    .map(r => ({ ...r, _state: stateById[r._docId] || null })).sort((a, b) => (a._order ?? 0) - (b._order ?? 0));
   const keywords = kws.docs.map(d => ({ ...d.data(), id: d.data().id || d.id, _docId: d.id }))
     .sort((a, b) => String(a.id).localeCompare(String(b.id)));
   const excluded = exs.docs.sort((a, b) => a.id.localeCompare(b.id)).map(d => d.data());
