@@ -587,6 +587,33 @@ const saveF = () => { try{ localStorage.setItem(FKEY, JSON.stringify(Object.from
 const passes = (r, skip) => FILTERS.every(f => f.key===skip || !fsel[f.key].size || f.vals(r).some(v => fsel[f.key].has(v)));
 const filtered = () => R.filter(r => passes(r));
 const fEl = $('#filters');
+// Radio directory picker: which countries' stations are loaded (D.directory comes from meta/directory; applying reloads the page).
+const DIR = D.directory || {zemlje:{}, ucitano:[]};
+const dirNames = Object.keys(DIR.zemlje).sort((a,b)=>(b==='Srbija')-(a==='Srbija') || a.localeCompare(b,'sr'));
+const dirSel = new Set(DIR.ucitano);
+const dirSum = list => list.reduce((a,c)=>a+(DIR.zemlje[c]||0),0);
+function dirBox(open){
+  if (!dirNames.length) return '';
+  return `<details class="flt ${DIR.ucitano.length?'active':''}" id="dirBox" data-key="dir" ${open?'open':''}>
+    <summary>Radio stanice: ${DIR.ucitano.length} od ${dirNames.length} zemalja</summary>
+    <div class="menu"><div class="mhead"><span id="dirInfo">izabrano ${dirSum([...dirSel])} od ${dirSum(dirNames)} stanica</span><button class="linkish" id="dirApply">Učitaj izabrane</button></div>
+    <div class="mhead"><span>učitavaju se samo izabrane zemlje</span><span><button class="linkish" id="dirAll">sve</button> · <button class="linkish" id="dirNone">nijedna</button></span></div>
+    ${dirNames.map(c=>`<label><input type="checkbox" data-dir value="${esc(c)}" ${dirSel.has(c)?'checked':''}><span>${esc(c)}</span><span class="n">${DIR.zemlje[c]}</span></label>`).join('')}</div></details>`;
+}
+fEl.addEventListener('change', e=>{
+  const c = e.target.closest('input[data-dir]'); if(!c) return;
+  c.checked ? dirSel.add(c.value) : dirSel.delete(c.value);
+  $('#dirInfo').textContent = `izabrano ${dirSum([...dirSel])} od ${dirSum(dirNames)} stanica`;
+});
+fEl.addEventListener('click', e=>{
+  const id = e.target.id;
+  if (id === 'dirApply') { e.preventDefault(); S.setDirectory([...dirSel]); }
+  else if (id === 'dirAll' || id === 'dirNone') {        // tick in place: a re-render would close the menu and drop the row count
+    e.preventDefault(); dirSel.clear(); if (id === 'dirAll') dirNames.forEach(c=>dirSel.add(c));
+    fEl.querySelectorAll('input[data-dir]').forEach(c => c.checked = dirSel.has(c.value));
+    $('#dirInfo').textContent = `izabrano ${dirSum([...dirSel])} od ${dirSum(dirNames)} stanica`;
+  }
+});
 function renderFilters(){
   const open = [...fEl.querySelectorAll('details[open]')].map(d=>d.dataset.key);
   fEl.innerHTML = FILTERS.map(f=>{
@@ -601,7 +628,7 @@ function renderFilters(){
       <div class="menu"><div class="mhead"><span>bilo koja od izabranih</span>${n?`<button class="linkish" data-clear="${f.key}">očisti</button>`:''}</div>
       ${vals.map(v=>`<label class="${counts[v]?'':'zero'}"><input type="checkbox" data-k="${f.key}" value="${esc(v)}" ${fsel[f.key].has(v)?'checked':''}>
         <span>${esc(f.fmt?f.fmt(v):v)}</span><span class="n">${counts[v]||0}</span></label>`).join('')}</div></details>`;
-  }).join('') + (FILTERS.some(f=>fsel[f.key].size) ? `<button class="linkish" id="fReset">Poništi sve filtere</button>` : '')
+  }).join('') + dirBox(open.includes('dir')) + (FILTERS.some(f=>fsel[f.key].size) ? `<button class="linkish" id="fReset">Poništi sve filtere</button>` : '')
     + `<span class="fcount" id="fCount"></span>`;
 }
 fEl.addEventListener('change', e=>{
@@ -675,7 +702,7 @@ route();
 import { initializeApp, deleteApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
 import { getAuth, connectAuthEmulator, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail,
   createUserWithEmailAndPassword, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
-import { getFirestore, connectFirestoreEmulator, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+import { getFirestore, connectFirestoreEmulator, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -749,9 +776,28 @@ onAuthStateChanged(auth, async user => {
   window.scoutInit(D, session(user, prof));
 });
 
+// Radio directory: tens of thousands of stations, loaded per country on demand. The choice is per browser; default = Srbija.
+const DIR_KEY = 'scout.directory.v1';
+function directoryChoice() {
+  try { const v = JSON.parse(localStorage.getItem(DIR_KEY)); if (Array.isArray(v)) return v.filter(x => typeof x === 'string'); } catch (_) {}
+  return ['Srbija'];
+}
+async function loadEntities() {
+  const E = collection(db, 'entities');
+  const dir = await getDoc(doc(db, 'meta', 'directory')).catch(() => null);
+  if (!dir || !dir.exists()) return { docs: (await getDocs(E)).docs, directory: null };          // database not yet synced with the directory index
+  const zemlje = dir.data().zemlje || {};
+  const chosen = directoryChoice().filter(c => c in zemlje);
+  const groups = []; for (let i = 0; i < chosen.length; i += 30) groups.push(chosen.slice(i, i + 30));   // `in` takes at most 30 values
+  const [singles, ...bundles] = await Promise.all([
+    getDocs(query(E, where('_order', '>=', 0))),                                                   // every single-entity doc; bundle docs have no top-level _order
+    ...groups.map(g => getDocs(query(E, where('bundle_drzava', 'in', g))))]);
+  return { docs: [...singles.docs, ...bundles.flatMap(s => s.docs)], directory: { zemlje, ucitano: chosen } };
+}
+
 async function loadData() {
   const [ents, kws, exs, run, states] = await Promise.all([
-    getDocs(collection(db, 'entities')), getDocs(collection(db, 'keywords')),
+    loadEntities(), getDocs(collection(db, 'keywords')),
     getDocs(collection(db, 'excluded')), getDoc(doc(db, 'meta', 'run')),
     getDocs(collection(db, 'entityState')).catch(() => ({ docs: [] }))]);   // rules not yet published -> no archive marks, list still loads
   const stateById = Object.fromEntries(states.docs.map(d => [d.id, d.data()]));
@@ -762,13 +808,14 @@ async function loadData() {
   const keywords = kws.docs.map(d => ({ ...d.data(), id: d.data().id || d.id, _docId: d.id }))
     .sort((a, b) => String(a.id).localeCompare(String(b.id)));
   const excluded = exs.docs.sort((a, b) => a.id.localeCompare(b.id)).map(d => d.data());
-  return { results, keywords, excluded, run: run.exists() ? run.data() : {} };
+  return { results, keywords, excluded, run: run.exists() ? run.data() : {}, directory: ents.directory };
 }
 
 // ── Session object handed to the app ──
 function session(user, prof) {
   return {
     uid: user.uid, email: user.email, role: prof.role, env: ENV,
+    setDirectory(list) { try { localStorage.setItem(DIR_KEY, JSON.stringify(list)); } catch (_) {} location.reload(); },   // the page reloads with those countries' stations
     async proposeKeywords(rows) {
       const out = [];
       for (const r of rows) {
