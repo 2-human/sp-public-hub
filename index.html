@@ -264,12 +264,12 @@ button.primary:hover{opacity:.9;background:var(--accent)}
 <section class="view" id="v-kontakti" hidden>
   <div class="view-head">
     <div><h2>Kontakti</h2><p class="sub" id="runMeta"></p></div>
-    <div class="actions"><button id="csvRes">Izvezi CSV (prikazano)</button></div>
+    <div class="actions"><button id="csvRes">Izvezi CSV (prikazano)</button> <button id="csvMail" title="Jedan red po email adresi, za mass mailing; poštuje filtere">Izvezi email listu (prikazano)</button></div>
   </div>
   <div class="stats" id="stats"></div>
   <div class="filters" id="filters"></div>
   <section class="sheet"><div class="scroll"><table id="resTable">
-    <thead><tr><th>Prio</th><th>Entitet</th><th>Tip</th><th>Oblast</th><th>Sedište</th><th>Tržište</th><th>Stav prema pokretu</th><th>Stav prema politici i izborima</th><th>Popularnost</th><th>Kontakt</th><th>Segment</th></tr></thead>
+    <thead><tr><th>Prio</th><th>Entitet</th><th>Tip</th><th>Oblast</th><th>Sedište</th><th>Tržište</th><th title="+2 podržava studente … −2 neprijateljski">Stav prema studentima</th><th title="+2 kritičan prema vlasti … −2 provladin">Stav prema vlasti</th><th>Popularnost</th><th>Kontakt</th><th>Segment</th></tr></thead>
     <tbody></tbody>
   </table></div>
   <div class="empty" id="empty" hidden>Nijedan entitet ne odgovara izabranim filterima.</div></section>
@@ -358,6 +358,7 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;
 const SEG = {"Saveznik-amplifikator":"a","Informisati i dati kontekst":"i","Ekspertski glas":"e","Partner za zagovaranje":"p","Nizak prioritet":"n"};
 const sc = o => { const v = Math.max(-2, Math.min(2, Number(o?.ocena)||0)); return `<span class="pill sc${v}">${v>0?'+':''}${v} · ${esc(o?.oznaka||'')}</span>`; };
 const KT = {email:'Email', telefon:'Telefon', forma:'Forma', stranica:'Stranica'};
+const linksHtml = st => { const L = (st&&st.linkovi)||[]; return L.length ? `<ul class="elist">${L.map(l=>`<li>${l.citat?`<span class="quote">„${esc(l.citat)}”</span> `:''}${link(l.url)}</li>`).join('')}</ul>` : '<p class="faint">Nema linka koji obrazlaže ocenu.</p>'; };
 const kcount = (r,t) => (r.kontakt||[]).filter(k=>typeof k==='object'&&k.tip===t).length;
 const prio = n => `<span class="prio" title="Prioritet ${n}/5">${[1,2,3,4,5].map(i=>`<span class="${i<=n?'on':''}"></span>`).join('')}</span>`;
 const link = (u, t) => /^https?:/.test(u||'') ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t||u.replace(/^https?:\/\/(www\.)?/,'').slice(0,60))}</a>` : esc(t||u);
@@ -462,9 +463,10 @@ function entityDrawer(i, focus){
       <section id="dr-contacts"><h4>Kontakt (javne stranice)</h4>${contactsHtml(r)}</section>
       <h4>Predlog upotrebe za kampanju</h4><p>${esc(r.predlog)}</p>
       <h4>Analiza</h4><p>${esc(r.analiza)}</p>
-      <h4>Stav prema pokretu</h4><p style="margin-bottom:6px">${sc(r.stav_pokret)}</p><p>${esc(r.stav_pokret?.obrazlozenje)}</p>
-      ${d?`<p class="quote" style="margin-top:6px">${esc(typeof d==='string'?d:d.citat||d.tekst||'')} ${d.url?link(d.url,'↗'):''}</p>`:''}
-      <h4>Stav prema politici i izborima</h4><p style="margin-bottom:6px">${sc(r.stav_politika_izbori)}</p><p>${esc(r.stav_politika_izbori?.obrazlozenje)}</p>
+      <h4>Stav prema studentima <span class="faint" style="font-weight:400">(+2 podržava … −2 neprijateljski)</span></h4><p style="margin-bottom:6px">${sc(r.stav_pokret)}</p><p>${esc(r.stav_pokret?.obrazlozenje)}</p>
+      ${linksHtml(r.stav_pokret)}
+      <h4>Stav prema vlasti <span class="faint" style="font-weight:400">(+2 kritičan … −2 provladin)</span></h4><p style="margin-bottom:6px">${sc(r.stav_politika_izbori)}</p><p>${esc(r.stav_politika_izbori?.obrazlozenje)}</p>
+      ${linksHtml(r.stav_politika_izbori)}
       <h4>Popularnost</h4><ul>${pop||'<li class="faint">—</li>'}</ul>
       <h4>Pronađeni rezultat</h4><p>${link(r.rezultat?.url, r.rezultat?.naslov)}<br><span class="faint">${esc(r.rezultat?.datum||'')}${r.rezultat?.autor?' · '+esc(r.rezultat.autor):''}</span></p>
       <h4>Pronađeno preko</h4>${kws.length?`<ul class="elist">${kws.map(k=>`<li><button data-go="kriterijumi/${esc(k.id)}"><span><span class="faint mono">${esc(k.id)}</span> ${esc(k.upit)}</span><span class="faint">${esc(k.platforme)}</span></button></li>`).join('')}</ul>`
@@ -572,8 +574,8 @@ const FILTERS = [
   {key:'vrsta', label:'Vrsta', vals:r=>(r.vrste&&r.vrste.length)?r.vrste:['neodređeno'], order:VRSTE_ORDER, fmt:v=>v.replace(' > ',' › ')},
   {key:'drzava', label:'Zemlja (sedište)', vals:r=>[r.drzava||'nepoznato'], order:['Srbija']},
   {key:'trziste', label:'Primarno tržište', vals:r=>[r.primarno_trziste||'nepoznato'], order:['Global','Evropa','Srbija']},
-  {key:'pokret', label:'Stav prema pokretu', vals:r=>[String(r.stav_pokret?.ocena??0)], order:['2','1','0','-1','-2'], fmt:v=>SC_LABEL[v]||v},
-  {key:'izbori', label:'Stav prema izborima', vals:r=>[String(r.stav_politika_izbori?.ocena??0)], order:['2','1','0','-1','-2'], fmt:v=>SC_LABEL[v]||v},
+  {key:'pokret', label:'Stav prema studentima', vals:r=>[String(r.stav_pokret?.ocena??0)], order:['2','1','0','-1','-2'], fmt:v=>SC_LABEL[v]||v},
+  {key:'izbori', label:'Stav prema vlasti', vals:r=>[String(r.stav_politika_izbori?.ocena??0)], order:['2','1','0','-1','-2'], fmt:v=>SC_LABEL[v]||v},
   {key:'kontakt', label:'Kontakt', vals:contactKinds, order:['Email','Telefon','Forma / stranica','Bez kontakta']},
   {key:'upit', label:'Upit', vals:r=>r.kw||[], order:KW.map(k=>k.id), fmt:v=>{const k=KW.find(x=>x.id===v); return k?`${v} · ${k.upit}`:v;}},
   {key:'platforma', label:'Platforma', vals:platOf},
@@ -696,6 +698,18 @@ $('#csvRes').onclick = ()=>csv('kontakti.csv',
   filtered().map(r=>[r.prioritet,r.name,r.tip,(r.vrste||[]).join('; '),r.kategorija,r.oblast,r.drzava,r.primarno_trziste,r.zemlja,r.stav_pokret?.ocena,r.stav_pokret?.oznaka,r.stav_politika_izbori?.ocena,r.stav_politika_izbori?.oznaka,
     (r.popularnost||[]).map(p=>`${p.metrika}: ${p.vrednost}`).join('; '),r.segment,r.analiza,r.predlog,r.rezultat?.url,
     kv(r,'email'),kv(r,'telefon'),(r.kontakt||[]).map(k=>typeof k==='object'?k.izvor:k).filter(Boolean).join(' '),r.pronadjeno?.upit,r.pronadjeno?.platforma,(r.otvoreno_sve||[]).join(' | '),STATUS[statusOf(r)],r._state?.reason||'']));
+
+const L = st => ((st&&st.linkovi)||[]).map(l=>l.url).join(' ');
+$('#csvMail').onclick = ()=>{
+  const rows = [];
+  filtered().forEach(r => (r.kontakt||[]).filter(k=>typeof k==='object'&&k.tip==='email').forEach(k => rows.push([
+    k.vrednost, k.namena, r.name, r.tip, (r.vrste||[]).join('; '), r.organizacija||'', r.drzava, r.primarno_trziste, r.segment, r.prioritet, STATUS[statusOf(r)],
+    r.stav_pokret?.ocena, r.stav_pokret?.oznaka, r.stav_pokret?.obrazlozenje, L(r.stav_pokret),
+    r.stav_politika_izbori?.ocena, r.stav_politika_izbori?.oznaka, r.stav_politika_izbori?.obrazlozenje, L(r.stav_politika_izbori),
+    k.izvor, r.pouzdanost_kontakta||''])));
+  csv('email-lista.csv', ['email','namena','entitet','tip','vrste','organizacija','zemlja_sediste','primarno_trziste','segment','prioritet','status',
+    'studenti_ocena','studenti_oznaka','studenti_razlog','studenti_linkovi','vlast_ocena','vlast_oznaka','vlast_razlog','vlast_linkovi','izvor_emaila','pouzdanost'], rows);
+};
 
 renderKw(); renderFilters(); renderRes();
 window.addEventListener('hashchange', route);
