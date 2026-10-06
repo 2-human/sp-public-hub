@@ -453,7 +453,7 @@ function entityDrawer(i, focus){
   const kws = (r.kw||[]).map(id=>KW.find(k=>k.id===id)).filter(Boolean);
   return {
     title: esc(r.name),
-    sub: `${esc(r.tip)} · ${esc(r.kategorija)} · sedište: ${esc(r.drzava)} · tržište: ${esc(r.primarno_trziste)}`,
+    sub: `${esc(r.tip)}${(r.vrste&&r.vrste.length)?' · '+esc(r.vrste.map(v=>v.replace(' > ',' › ')).join(', ')):''} · ${esc(r.kategorija)} · sedište: ${esc(r.drzava)} · tržište: ${esc(r.primarno_trziste)}`,
     meta: `${prio(r.prioritet||0)} ${segPill(r.segment)}`,
     focus,
     body: `
@@ -564,10 +564,12 @@ const SC_LABEL = {'2':'+2 podržava','1':'+1','0':'0 neutralno','-1':'−1','-2'
 const platOf = r => (r.pronadjeno?.platforma || 'Google').split('+').map(p=>p.trim().split(/[\s(]/)[0]).filter(Boolean);
 const contactKinds = r => { const ne=kcount(r,'email'), nt=kcount(r,'telefon'), no=(r.kontakt||[]).length-ne-nt;
   const out=[]; if(ne) out.push('Email'); if(nt) out.push('Telefon'); if(no) out.push('Forma / stranica'); if(!out.length) out.push('Bez kontakta'); return out; };
+const VRSTE_ORDER = Object.entries((D.run&&D.run.vrste_recnik)||{}).flatMap(([g,vs])=>vs.map(v=>`${g} > ${v}`)).concat(['neodređeno']);
 const FILTERS = [
   {key:'segment', label:'Segment', vals:r=>[r.segment], order:Object.keys(SEG)},
   {key:'prio', label:'Prioritet', vals:r=>[String(r.prioritet||0)], order:['5','4','3','2','1'], fmt:v=>`${v} / 5`},
   {key:'tip', label:'Tip', vals:r=>[r.tip]},
+  {key:'vrsta', label:'Vrsta', vals:r=>(r.vrste&&r.vrste.length)?r.vrste:['neodređeno'], order:VRSTE_ORDER, fmt:v=>v.replace(' > ',' › ')},
   {key:'drzava', label:'Zemlja (sedište)', vals:r=>[r.drzava||'nepoznato'], order:['Srbija']},
   {key:'trziste', label:'Primarno tržište', vals:r=>[r.primarno_trziste||'nepoznato'], order:['Global','Evropa','Srbija']},
   {key:'pokret', label:'Stav prema pokretu', vals:r=>[String(r.stav_pokret?.ocena??0)], order:['2','1','0','-1','-2'], fmt:v=>SC_LABEL[v]||v},
@@ -663,7 +665,7 @@ function renderRes(){
     const kc = [ne?`✉ ${ne}`:'', nt?`☎ ${nt}`:'', !ne&&!nt&&no?`↗ ${no}`:''].filter(Boolean).join(' ');
     return `<tr class="row st-${statusOf(r)} ${sel[0]==='kontakti'&&sel[1]===String(id)?'sel':''}" tabindex="0" data-view="kontakti" data-id="${id}">
       <td>${prio(r.prioritet||0)}</td>
-      <td><div class="name">${esc(r.name)}${statusOf(r)!=='trijaza'?` <span class="tag st-${statusOf(r)}">${STATUS[statusOf(r)].toLowerCase()}</span>`:''}</div><div class="faint" style="font-size:12px">${esc(r.kategorija)}</div></td>
+      <td><div class="name">${esc(r.name)}${statusOf(r)!=='trijaza'?` <span class="tag st-${statusOf(r)}">${STATUS[statusOf(r)].toLowerCase()}</span>`:''}</div><div class="faint" style="font-size:12px">${esc((r.vrste&&r.vrste.length)?r.vrste.map(v=>v.split(' > ')[1]).join(' · '):r.kategorija)}</div></td>
       <td class="muted">${esc(r.tip)}</td>
       <td class="muted">${esc(r.oblast)}</td>
       <td class="muted">${esc(r.drzava)}</td>
@@ -690,8 +692,8 @@ function csv(name, head, rows){
 }
 $('#csvKw').onclick = ()=>csv('kriterijumi-pretrage.csv', csvCols, [...KW.map(k=>csvCols.map(c=>k[c])), ...drafts.map(d=>csvCols.map(c=>c==='status'?(d.poslato?'poslato':'nacrt'):d[c]))]);
 $('#csvRes').onclick = ()=>csv('kontakti.csv',
-  ['prioritet','entitet','tip','kategorija','oblast','zemlja_sediste','primarno_trziste','zemlja_opis','stav_pokret','stav_pokret_oznaka','stav_izbori','stav_izbori_oznaka','popularnost','segment','analiza','predlog','rezultat_url','emailovi','telefoni','kontakt_izvori','upit','platforma','otvoreno','status','status_napomena'],
-  filtered().map(r=>[r.prioritet,r.name,r.tip,r.kategorija,r.oblast,r.drzava,r.primarno_trziste,r.zemlja,r.stav_pokret?.ocena,r.stav_pokret?.oznaka,r.stav_politika_izbori?.ocena,r.stav_politika_izbori?.oznaka,
+  ['prioritet','entitet','tip','vrste','kategorija','oblast','zemlja_sediste','primarno_trziste','zemlja_opis','stav_pokret','stav_pokret_oznaka','stav_izbori','stav_izbori_oznaka','popularnost','segment','analiza','predlog','rezultat_url','emailovi','telefoni','kontakt_izvori','upit','platforma','otvoreno','status','status_napomena'],
+  filtered().map(r=>[r.prioritet,r.name,r.tip,(r.vrste||[]).join('; '),r.kategorija,r.oblast,r.drzava,r.primarno_trziste,r.zemlja,r.stav_pokret?.ocena,r.stav_pokret?.oznaka,r.stav_politika_izbori?.ocena,r.stav_politika_izbori?.oznaka,
     (r.popularnost||[]).map(p=>`${p.metrika}: ${p.vrednost}`).join('; '),r.segment,r.analiza,r.predlog,r.rezultat?.url,
     kv(r,'email'),kv(r,'telefon'),(r.kontakt||[]).map(k=>typeof k==='object'?k.izvor:k).filter(Boolean).join(' '),r.pronadjeno?.upit,r.pronadjeno?.platforma,(r.otvoreno_sve||[]).join(' | '),STATUS[statusOf(r)],r._state?.reason||'']));
 
