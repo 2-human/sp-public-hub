@@ -597,7 +597,7 @@ function dirBox(open){
   return `<details class="flt ${DIR.ucitano.length?'active':''}" id="dirBox" data-key="dir" ${open?'open':''}>
     <summary>Radio stanice: ${DIR.ucitano.length} od ${dirNames.length} zemalja</summary>
     <div class="menu"><div class="mhead"><span id="dirInfo">izabrano ${dirSum([...dirSel])} od ${dirSum(dirNames)} stanica</span><button class="linkish" id="dirApply">Učitaj izabrane</button></div>
-    <div class="mhead"><span>učitavaju se samo izabrane zemlje</span><span><button class="linkish" id="dirAll">sve</button> · <button class="linkish" id="dirNone">nijedna</button></span></div>
+    <div class="mhead"><button class="linkish" id="dirLoadAll">Učitaj sve zemlje (${dirSum(dirNames)} stanica)</button><span><button class="linkish" id="dirAll">sve</button> · <button class="linkish" id="dirNone">nijedna</button></span></div>
     ${dirNames.map(c=>`<label><input type="checkbox" data-dir value="${esc(c)}" ${dirSel.has(c)?'checked':''}><span>${esc(c)}</span><span class="n">${DIR.zemlje[c]}</span></label>`).join('')}</div></details>`;
 }
 fEl.addEventListener('change', e=>{
@@ -608,6 +608,8 @@ fEl.addEventListener('change', e=>{
 fEl.addEventListener('click', e=>{
   const id = e.target.id;
   if (id === 'dirApply') { e.preventDefault(); S.setDirectory([...dirSel]); }
+  else if (id === 'dirLoadAll') { e.preventDefault(); S.setDirectory(dirNames.slice()); }
+  else if (id === 'showAll') { e.preventDefault(); showAll = true; renderRes(); }
   else if (id === 'dirAll' || id === 'dirNone') {        // tick in place: a re-render would close the menu and drop the row count
     e.preventDefault(); dirSel.clear(); if (id === 'dirAll') dirNames.forEach(c=>dirSel.add(c));
     fEl.querySelectorAll('input[data-dir]').forEach(c => c.checked = dirSel.has(c.value));
@@ -644,13 +646,16 @@ fEl.addEventListener('click', e=>{
   saveF(); renderFilters(); renderRes();
 });
 document.addEventListener('click', e=>{ fEl.querySelectorAll('details[open]').forEach(d=>{ if(!d.contains(e.target)) d.open=false; }); });
-const ROW_LIMIT = 500;                       // the table draws this many rows; filters and the CSV export always see all of them
+const ROW_LIMIT = 5000;                      // above this the table draws the first rows and offers "Prikaži sve"; filters and CSV always see all
 const RI = new Map(R.map((r, i) => [r, i]));
+let showAll = false;
 function renderRes(){
-  const all = filtered(), rows = all.slice(0, ROW_LIMIT);
+  const all = filtered(), rows = showAll ? all : all.slice(0, ROW_LIMIT);
   $('#empty').hidden = all.length>0;
-  const fc = $('#fCount'); if (fc) fc.textContent = (all.length===R.length ? `${R.length} entiteta` : `Prikazano ${all.length} od ${R.length}`)
-    + (all.length>ROW_LIMIT ? ` · u tabeli prvih ${ROW_LIMIT} po prioritetu, suzite filterima` : '');
+  const rest = dirSum(dirNames) - dirSum(DIR.ucitano);
+  const fc = $('#fCount'); if (fc) fc.innerHTML = esc(all.length===R.length ? `${R.length} entiteta` : `Prikazano ${all.length} od ${R.length}`)
+    + (rows.length<all.length ? ` · u tabeli prvih ${rows.length} po prioritetu <button class="linkish" id="showAll">Prikaži sve (${all.length})</button>` : '')
+    + (rest>0 ? ` · <span class="faint">još ${rest} radio stanica u bazi nije učitano (meni „Radio stanice”)</span>` : '');
   const sel = decodeURIComponent(location.hash.slice(1)).split('/');
   $('#resTable tbody').innerHTML = rows.map(r=>{
     const id = RI.get(r), p0 = (r.popularnost||[])[0];
