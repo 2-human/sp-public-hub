@@ -599,7 +599,7 @@ const dirSum = list => list.reduce((a,c)=>a+(DIR.zemlje[c]||0),0);
 function dirBox(open){
   if (!dirNames.length) return '';
   return `<details class="flt ${DIR.ucitano.length?'active':''}" id="dirBox" data-key="dir" ${open?'open':''}>
-    <summary>Radio stanice: ${DIR.ucitano.length} od ${dirNames.length} zemalja</summary>
+    <summary>Radio i TV stanice: ${DIR.ucitano.length} od ${dirNames.length} zemalja</summary>
     <div class="menu"><div class="mhead"><span id="dirInfo">izabrano ${dirSum([...dirSel])} od ${dirSum(dirNames)} stanica</span><button class="linkish" id="dirApply">Učitaj izabrane</button></div>
     <div class="mhead"><button class="linkish" id="dirLoadAll">Učitaj sve zemlje (${dirSum(dirNames)} stanica)</button><span><button class="linkish" id="dirAll">sve</button> · <button class="linkish" id="dirNone">nijedna</button></span></div>
     ${dirNames.map(c=>`<label><input type="checkbox" data-dir value="${esc(c)}" ${dirSel.has(c)?'checked':''}><span>${esc(c)}</span><span class="n">${DIR.zemlje[c]}</span></label>`).join('')}</div></details>`;
@@ -659,7 +659,7 @@ function renderRes(){
   const rest = dirSum(dirNames) - dirSum(DIR.ucitano);
   const fc = $('#fCount'); if (fc) fc.innerHTML = esc(all.length===R.length ? `${R.length} entiteta` : `Prikazano ${all.length} od ${R.length}`)
     + (rows.length<all.length ? ` · u tabeli prvih ${rows.length} po prioritetu <button class="linkish" id="showAll">Prikaži sve (${all.length})</button>` : '')
-    + (rest>0 ? ` · <span class="faint">još ${rest} radio stanica u bazi nije učitano (meni „Radio stanice”)</span>` : '');
+    + (rest>0 ? ` · <span class="faint">još ${rest} radio i TV stanica u bazi nije učitano (meni „Radio i TV stanice”)</span>` : '');
   const sel = decodeURIComponent(location.hash.slice(1)).split('/');
   $('#resTable tbody').innerHTML = rows.map(r=>{
     const id = RI.get(r), p0 = (r.popularnost||[])[0];
