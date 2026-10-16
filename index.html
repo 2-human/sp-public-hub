@@ -428,7 +428,7 @@ $('#drawer').addEventListener('click', async e => {
 function contactsHtml(r){
   const items = (r.kontakt||[]).map(k=>{
     if (typeof k === 'string') return `<li><span class="k">Stranica</span><span class="v">${link(k)}</span></li>`;
-    const v = k.tip==='email' ? `<a href="mailto:${esc(k.vrednost)}">${esc(k.vrednost)}</a>${k.provera?` <span class="faint" style="font-size:12px;${/not found|Nema/.test(k.provera.rezultat)?'color:#b42318;':''}" title="${esc(k.provera.izvor+' '+k.provera.datum)}">· ${esc(k.provera.rezultat)}</span>`:''}`
+    const v = k.tip==='email' ? `<a href="mailto:${esc(k.vrednost)}">${esc(k.vrednost)}</a>${k.provera?` <span class="faint" style="font-size:12px;${/not found|full|Nema/.test(k.provera.rezultat)?'color:#b42318;':''}" title="${esc(k.provera.izvor+' '+k.provera.datum)}">· ${esc(k.provera.rezultat)}</span>`:''}`
             : k.tip==='telefon' ? `<a href="tel:${esc(String(k.vrednost).replace(/[^+\d]/g,''))}">${esc(k.vrednost)}</a>`
             : link(k.vrednost);
     return `<li><span class="k">${esc(KT[k.tip]||k.tip)}${k.namena?` · ${esc(k.namena)}`:''}</span><span class="v">${v}</span>${/^https?:/.test(k.izvor||'')?` <span class="faint" style="font-size:12px">(${link(k.izvor,'izvor')})</span>`:''}</li>`;
@@ -578,7 +578,7 @@ const FILTERS = [
   {key:'pokret', label:'Stav prema studentima', vals:r=>[String(r.stav_pokret?.ocena??0)], order:['2','1','0','-1','-2'], fmt:v=>SC_LABEL[v]||v},
   {key:'izbori', label:'Stav prema vlasti', vals:r=>[String(r.stav_politika_izbori?.ocena??0)], order:['2','1','0','-1','-2'], fmt:v=>SC_LABEL[v]||v},
   {key:'kontakt', label:'Kontakt', vals:contactKinds, order:['Email','Telefon','Forma / stranica','Bez kontakta']},
-  {key:'provera', label:'Provera emaila', vals:r=>{ const em=(r.kontakt||[]).filter(k=>typeof k==='object'&&k.tip==='email'); if(!em.length) return []; const v=[...new Set(em.map(k=>k.provera?k.provera.rezultat:'Nije provereno'))]; return v; }, order:['Valid','Role based','Catch all','Unknown','Mailbox not found','Nema rezultata','Nije provereno']},
+  {key:'provera', label:'Provera emaila', vals:r=>{ const em=(r.kontakt||[]).filter(k=>typeof k==='object'&&k.tip==='email'); if(!em.length) return []; const v=[...new Set(em.map(k=>k.provera?k.provera.rezultat:'Nije provereno'))]; return v; }, order:['Valid','Role based','Catch all','Unknown','Typo (objavljena adresa potvrđena)','Mailbox full','Mailbox not found','Nema rezultata','Nije provereno']},
   {key:'upit', label:'Upit', vals:r=>r.kw||[], order:KW.map(k=>k.id), fmt:v=>{const k=KW.find(x=>x.id===v); return k?`${v} · ${k.upit}`:v;}},
   {key:'platforma', label:'Platforma', vals:platOf},
   {key:'status', label:'Status', vals:r=>[STATUS[statusOf(r)]], order:Object.values(STATUS)},
