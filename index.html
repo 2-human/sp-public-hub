@@ -468,6 +468,7 @@ function entityDrawer(i, focus){
       <h4>Stav prema vlasti <span class="faint" style="font-weight:400">(+2 kritičan … −2 provladin)</span></h4><p style="margin-bottom:6px">${sc(r.stav_politika_izbori)}</p><p>${esc(r.stav_politika_izbori?.obrazlozenje)}</p>
       ${linksHtml(r.stav_politika_izbori)}
       <h4>Popularnost</h4><ul>${pop||'<li class="faint">—</li>'}</ul>
+      ${(r.clanci||[]).length?`<h4>Članci o Srbiji (Meltwater, ${r.clanci_ukupno||r.clanci.length})</h4><ul class="elist">${r.clanci.map(a=>`<li>${link(a.url,a.naslov)}<br><span class="faint">${esc(a.datum)} · ${esc(a.izvor)}${a.autor?' · '+esc(a.autor):''}</span></li>`).join('')}</ul>`:''}
       <h4>Pronađeni rezultat</h4><p>${link(r.rezultat?.url, r.rezultat?.naslov)}<br><span class="faint">${esc(r.rezultat?.datum||'')}${r.rezultat?.autor?' · '+esc(r.rezultat.autor):''}</span></p>
       <h4>Pronađeno preko</h4>${kws.length?`<ul class="elist">${kws.map(k=>`<li><button data-go="kriterijumi/${esc(k.id)}"><span><span class="faint mono">${esc(k.id)}</span> ${esc(k.upit)}</span><span class="faint">${esc(k.platforme)}</span></button></li>`).join('')}</ul>`
         : r.pronadjeno?`<p>„${esc(r.pronadjeno.upit)}“ · ${esc(r.pronadjeno.platforma)}</p>`:'<p class="faint">—</p>'}`
